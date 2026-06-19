@@ -1,0 +1,35 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Pretendard", "Inter", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-navy-950: #0B1224;
+  --color-brand-navy-900: #0F1A36;
+  --color-brand-navy-800: #1B2B50;
+  --color-brand-navy-700: #283D6A;
+  --color-brand-navy-600: #3D5A80;
+  
+  --color-brand-gold-600: #9E8963;
+  --color-brand-gold-500: #C2B090;
+  --color-brand-gold-400: #DFD5C3;
+  --color-brand-gold-300: #EFECE3;
+  --color-brand-gold-200: #F8F6F0;
+
+  --color-brand-beige-600: #9E8963;
+  --color-brand-beige-500: #C2B090;
+  --color-brand-beige-400: #DFD5C3;
+  --color-brand-beige-300: #EFECE3;
+  --color-brand-beige-200: #F8F6F0;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-brand-navy-950);
+    color: #F3F4F6;
+    font-family: var(--font-sans);
+  }
+}

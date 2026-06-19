@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "An inbound hotel management consultation inquiry from a potential hotel partner",
+      "type": "object",
+      "properties": {
+        "hotelName": {
+          "type": "string",
+          "description": "The name of the hotel or building"
+        },
+        "location": {
+          "type": "string",
+          "description": "The region or location of the hotel"
+        },
+        "roomsCount": {
+          "type": "string",
+          "description": "The number of rooms in the hotel"
+        },
+        "clientName": {
+          "type": "string",
+          "description": "The name of the client or representative"
+        },
+        "clientPosition": {
+          "type": "string",
+          "description": "The position or title of the representative"
+        },
+        "contact": {
+          "type": "string",
+          "description": "The contact phone number"
+        },
+        "monthlyRevenue": {
+          "type": "string",
+          "description": "The current approximate monthly revenue of the hotel"
+        },
+        "worries": {
+          "type": "array",
+          "description": "Selected key problems or worries of the hotel"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["new", "processing", "completed"],
+          "description": "The operational back-office processing status of this inquiry"
+        },
+        "adminMemo": {
+          "type": "string",
+          "description": "Detailed admin-only consultation notes and logs"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the inquiry was submitted"
+        }
+      },
+      "required": ["hotelName", "location", "roomsCount", "clientName", "clientPosition", "contact", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/inquiries/{inquiryId}": {
+      "schema": "Inquiry",
+      "description": "Inbound hotel operator leads and inquiries"
+    }
+  }
+}

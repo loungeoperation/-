@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /inquiries/{inquiryId} {
+      allow create: if isValidId(inquiryId) && isValidInquiryCreate(incoming());
+      
+      allow get, list: if isAdmin();
+      
+      allow update: if isAdmin() && isValidId(inquiryId) && isValidInquiryUpdate(existing(), incoming());
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             request.auth.token.email_verified == true && 
+             request.auth.token.email == 'loungeinseoul@gmail.com';
+    }
+
+    function isValidInquiryCreate(data) {
+      return data.keys().hasAll(['hotelName', 'location', 'roomsCount', 'clientName', 'clientPosition', 'contact', 'status', 'createdAt']) 
+             && data.keys().size() >= 8 && data.keys().size() <= 11
+             && data.hotelName is string && data.hotelName.size() <= 200 && data.hotelName.size() > 0
+             && data.location is string && data.location.size() <= 100 && data.location.size() > 0
+             && data.roomsCount is string && data.roomsCount.size() <= 50 && data.roomsCount.size() > 0
+             && data.clientName is string && data.clientName.size() <= 100 && data.clientName.size() > 0
+             && data.clientPosition is string && data.clientPosition.size() <= 100 && data.clientPosition.size() > 0
+             && data.contact is string && data.contact.size() <= 50 && data.contact.size() > 0
+             && (data.get('monthlyRevenue', '') is string && data.get('monthlyRevenue', '').size() <= 100)
+             && (data.get('worries', []) is list && data.get('worries', []).size() <= 10)
+             && data.status == 'new'
+             && (data.get('adminMemo', '') is string && data.get('adminMemo', '').size() == 0)
+             && data.createdAt == request.time;
+    }
+
+    function isValidInquiryUpdate(existingData, incomingData) {
+      return incomingData.status in ['new', 'processing', 'completed']
+             && incomingData.adminMemo is string && incomingData.adminMemo.size() <= 10000
+             // Ensure that metadata fields/immutable fields did not change
+             && incomingData.hotelName == existingData.hotelName
+             && incomingData.location == existingData.location
+             && incomingData.roomsCount == existingData.roomsCount
+             && incomingData.clientName == existingData.clientName
+             && incomingData.clientPosition == existingData.clientPosition
+             && incomingData.contact == existingData.contact
+             && incomingData.createdAt == existingData.createdAt
+             && incomingData.get('monthlyRevenue', '') == existingData.get('monthlyRevenue', '')
+             // Limit changes to status or adminMemo
+             && incomingData.diff(existingData).affectedKeys().hasOnly(['status', 'adminMemo']);
+    }
+  }
+}

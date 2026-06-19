@@ -1,0 +1,6 @@
+{
+  "name": "라운지오퍼레이션",
+  "description": "소수 정예 프리미엄 호텔 매니지먼트 및 VIP 1:1 마이크로 오퍼레이션 자산진단시스템",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
