@@ -4,7 +4,9 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged, 
-  User 
+  User,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { 
   collection, 
@@ -49,12 +51,17 @@ export default function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Interactive controls states
-  const [demoMode, setDemoMode] = useState(false);
   const [memoText, setMemoText] = useState('');
   const [inquiryStatus, setInquiryStatus] = useState<InquiryStatus>(InquiryStatus.NEW);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+
+  // Email/Password Auth states
+  const [useEmailAuth, setUseEmailAuth] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
 
   // Webhook integration states
   const [webhookUrlInput, setWebhookUrlInput] = useState('');
@@ -131,8 +138,7 @@ export default function AdminPanel() {
 
   // Is Authorized Admin
   const isAuthorizedEmail = user?.email === 'loungeinseoul@gmail.com';
-  // Allow entrance if authorized email OR demo mode was toggled for preview reviewers
-  const isAccessible = isAuthorizedEmail || demoMode;
+  const isAccessible = isAuthorizedEmail;
 
   // Real-time inquiries synchronization from Firestore
   useEffect(() => {
@@ -195,9 +201,48 @@ export default function AdminPanel() {
       setAuthLoading(true);
       await signInWithPopup(auth, googleProvider);
       setErrorText(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorText('로그인 도중 문제가 생성되었습니다.');
+      setErrorText(`구글 로그인 실패: ${err.message || '인증 오류가 발생했습니다.'}`);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleEmailAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput.trim() || !passwordInput.trim()) {
+      setErrorText('이메일과 비밀번호를 입력해 주세요.');
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      setErrorText(null);
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+      } else {
+        await signInWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/user-not-found') {
+        setErrorText('등록된 계정이 아닙니다. 신규 가입이 필요하시면 [새 관리자 이메일 계정 만들기] 탭을 켜주세요.');
+      } else if (err.code === 'auth/wrong-password') {
+        setErrorText('비밀번호가 올바르지 않습니다.');
+      } else if (err.code === 'auth/invalid-email') {
+        setErrorText('올바른 이메일 형식이 아닙니다.');
+      } else if (err.code === 'auth/weak-password') {
+        setErrorText('비밀번호는 최소 6자 이상이어야 합니다.');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setErrorText('이미 등록된 이메일 계정입니다. 로그인 탭으로 로그인해 주세요.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setErrorText('이 도메인이 Firebase 승인 도메인 목록에 없습니다. 이메일 로그인을 이용하거나 콘솔에 도메인을 추가해 주세요.');
+      } else if (err.code === 'auth/configuration-not-found') {
+        setErrorText('Firebase 콘솔에서 이메일/비밀번호(Email/Password) 로그인 방식이 활성화되지 않았습니다. 콘솔에서 활성화해 주세요.');
+      } else {
+        setErrorText(`로그인 실패: ${err.message || String(err)}`);
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -205,7 +250,6 @@ export default function AdminPanel() {
 
   const handleLogout = async () => {
     await signOut(auth);
-    setDemoMode(false);
     setSelectedInquiry(null);
   };
 
@@ -339,48 +383,114 @@ export default function AdminPanel() {
               <ShieldCheck className="w-8 h-8" />
             </div>
 
-            <h3 className="text-lg font-display font-bold text-white tracking-tight">
+            <h3 className="text-lg font-display font-bold text-white tracking-tight mb-2">
               대표자 및 지배인 보안 로그인
             </h3>
-            <p className="text-xs text-gray-400 leading-relaxed mt-2 mb-8 max-w-xs mx-auto">
-              본 시스템은 등재주체 및 협상 실무자만 열람할 수 있습니다. <span className="text-brand-gold-300 font-sans font-semibold">loungeinseoul@gmail.com</span> 계정으로 연결해 주십시오.
+            <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto mb-6 font-sans">
+              본 시스템은 등록된 등재주체 및 협상 실무자만 열람할 수 있습니다. 승인받은 관리자 전용 계정으로 연결해 주십시오.
             </p>
 
-            <button
-              onClick={handleLogin}
-              className="w-full bg-gradient-to-r from-brand-gold-600 to-brand-gold-500 text-brand-navy-950 font-bold py-3 px-4 rounded shadow hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm uppercase tracking-wider"
-              id="admin-google-login-btn"
-            >
-              <LogIn className="w-4 h-4" />
-              Google 계정으로 로그인하기
-            </button>
+            {/* Error Message rendering inside login card */}
+            {errorText && (
+              <div className="mb-6 p-3 bg-red-950/60 border border-red-500/30 rounded text-left text-xs text-red-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" id="login-error-icon" />
+                <span>{errorText}</span>
+              </div>
+            )}
 
-            {/* DEMO BYPASS OPTION FOR REVIEWERS */}
-            <div className="mt-8 pt-6 border-t border-brand-gold-500/10">
-              <p className="text-[10px] text-gray-500 leading-relaxed mb-3">
-                ⚠️ [기획안 심사용 데모 허용] <br />
-                loungeinseoul@gmail.com 계정이 없는 심사자 분들을 위해 테스트 권한을 제공합니다. 아래 버튼으로 입장하시면 실시간 데이터 추가/조정, 메모 저장을 즉시 체험하실 수 있습니다.
-              </p>
+            {/* Tabs for Login Type */}
+            <div className="flex border-b border-brand-gold-500/20 mb-6" id="login-method-tabs">
               <button
-                onClick={() => {
-                  setDemoMode(true);
-                  // Setup simulated reviewer user
-                  setUser({
-                    email: 'reviewer@aistudio-eval.com',
-                    emailVerified: true,
-                    uid: 'reviewer_mock_id'
-                  } as any);
-                }}
-                className="text-xs text-brand-gold-400 hover:text-brand-gold-300 underline underline-offset-4 font-mono font-bold cursor-pointer"
-                id="admin-demo-bypass-btn"
+                type="button"
+                onClick={() => { setUseEmailAuth(false); setErrorText(null); }}
+                className={`flex-1 pb-2.5 text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${!useEmailAuth ? 'border-brand-gold-500 text-brand-gold-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                id="tab-google-login"
               >
-                심사 위원 전용 데모 모드로 입장하기
+                Google 간편로그인
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUseEmailAuth(true); setErrorText(null); }}
+                className={`flex-1 pb-2.5 text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${useEmailAuth ? 'border-brand-gold-500 text-brand-gold-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                id="tab-email-login"
+              >
+                이메일/비밀번호 로그인
               </button>
             </div>
+
+            {!useEmailAuth ? (
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  className="w-full bg-gradient-to-r from-brand-gold-600 to-brand-gold-500 text-brand-navy-950 font-bold py-3 px-4 rounded shadow hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm uppercase tracking-wider"
+                  id="admin-google-login-btn"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Google 계정으로 로그인하기
+                </button>
+                <p className="text-[10px] text-gray-500 leading-relaxed text-left bg-brand-navy-950/40 p-2.5 rounded border border-brand-gold-500/10">
+                  ※ Netlify 등 외부 배포 도메인이나 개인 커스텀 도메인에서 Google 간편로그인을 사용하시려면, Firebase 콘솔의 [Authentication ➡️ Settings ➡️ Authorized Domains] 목록에 해당 웹사이트 주소를 등록하셔야 합니다. 등록 전까지는 우측 이메일 로그인 방식을 이용하시면 막힘없이 사용 가능합니다.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleEmailAuthSubmit} className="text-left space-y-4" id="email-login-form">
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-wider text-brand-gold-400 mb-1.5" id="label-email-input">
+                    이메일 주소 (Mail)
+                  </label>
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    required
+                    className="w-full bg-brand-navy-950 border border-brand-gold-500/20 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-gold-500 transition-all font-sans"
+                    placeholder="example@domain.com"
+                    id="email-auth-field"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-[10px] font-mono uppercase tracking-wider text-brand-gold-400" id="label-password-input">
+                      비밀번호 (Secret)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsSignUp(!isSignUp)}
+                      className="text-[10px] text-brand-gold-400 hover:underline cursor-pointer font-bold"
+                      id="toggle-signup-mode-btn"
+                    >
+                      {isSignUp ? "→ 이메일 로그인하기" : "→ 새 이메일 계정 만들기"}
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    required
+                    className="w-full bg-brand-navy-950 border border-brand-gold-500/20 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-gold-500 transition-all"
+                    placeholder="••••••••"
+                    id="password-auth-field"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-brand-gold-600 to-brand-gold-500 text-brand-navy-950 font-bold py-2.5 px-4 rounded shadow hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 text-xs sm:text-sm uppercase tracking-wider"
+                  id="email-auth-submit-btn"
+                >
+                  <LogIn className="w-4 h-4" />
+                  {isSignUp ? "새 계정 생성 후 즉시 로그인" : "보안 메일 로그인"}
+                </button>
+                <p className="text-[10px] text-gray-500 leading-relaxed mt-2 text-center">
+                  이메일 인증 방식은 도메인 제한 오류를 원천 차단하여 Netlify, 커스텀 도메인 등 환경을 가리지 않고 안심하고 관리자 페이지를 열 수 있게 해줍니다.
+                </p>
+              </form>
+            )}
           </div>
         ) : !isAccessible ? (
           /* Signed in with wrong account */
-          <div className="max-w-md mx-auto text-center py-10 px-6 bg-brand-navy-900/60 rounded border border-brand-gold-500/20" id="admin-access-denied-card">
+          <div className="max-w-md mx-auto text-center py-10 px-6 bg-brand-navy-900/60 rounded border border-brand-gold-500/20 shadow-2xl" id="admin-access-denied-card">
             <div className="w-12 h-12 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center text-red-400 mx-auto mb-4">
               <AlertCircle className="w-6 h-6" />
             </div>
@@ -391,23 +501,16 @@ export default function AdminPanel() {
             
             <p className="text-xs text-gray-400 my-4 leading-relaxed bg-brand-navy-950/60 p-4 rounded border border-red-500/20 font-mono">
               로그인 계정: {user.email} <br />
-              지정된 고유 계정이 아니므로 열람을 전면 차단합니다. <b className="text-brand-gold-400">loungeinseoul@gmail.com</b> 대표 계정으로 재접속해 주세요.
+              지정된 관리 계정이 아니므로 열람을 전면 차단합니다. 승인된 정식 관리자 계정으로 로그인해 주십시오.
             </p>
 
-            <div className="flex gap-4">
+            <div className="flex justify-center mt-6">
               <button
                 onClick={handleLogout}
-                className="flex-1 bg-brand-navy-900 hover:bg-brand-navy-800 border border-brand-gold-500/20 text-brand-gold-400 py-2.5 rounded text-xs cursor-pointer font-bold transition-all"
+                className="w-full bg-brand-navy-900 hover:bg-brand-navy-800 border border-brand-gold-500/20 text-brand-gold-400 py-3 rounded text-xs cursor-pointer font-bold transition-all uppercase tracking-wider"
                 id="admin-logout-and-retry-btn"
               >
-                다른 계정으로 로그인
-              </button>
-              <button
-                onClick={() => setDemoMode(true)}
-                className="flex-1 bg-brand-gold-500 text-brand-navy-950 py-2.5 rounded text-xs cursor-pointer font-bold transition-all"
-                id="admin-accept-demo-from-lock-btn"
-              >
-                데모 관리자로 임시 시뮬레이션
+                다른 계정으로 로그인하기
               </button>
             </div>
           </div>
