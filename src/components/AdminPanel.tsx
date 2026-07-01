@@ -58,7 +58,6 @@ export default function AdminPanel() {
   const [errorText, setErrorText] = useState<string | null>(null);
 
   // Local/Custom Auth states
-  const [isLocallyAuthenticated, setIsLocallyAuthenticated] = useState(false);
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
 
@@ -126,13 +125,8 @@ export default function AdminPanel() {
     setTimeout(() => setTestStatus('idle'), 5000);
   };
 
-  // Bind Auth state and custom local session on mount
+  // Bind Auth state on mount
   useEffect(() => {
-    const isLocal = localStorage.getItem('lo_admin_authenticated') === 'true';
-    if (isLocal) {
-      setIsLocallyAuthenticated(true);
-    }
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
@@ -143,8 +137,7 @@ export default function AdminPanel() {
   // Is Authorized Admin
   const isAuthorizedEmail = 
     user?.email === 'loungeinseoul@gmail.com' || 
-    user?.email === 'loungeseoulicheon@loungeoperation.co.kr' || 
-    isLocallyAuthenticated;
+    user?.email === 'loungeseoulicheon@loungeoperation.co.kr';
   const isAccessible = isAuthorizedEmail;
 
   // Real-time inquiries synchronization from Firestore
@@ -206,8 +199,8 @@ export default function AdminPanel() {
   const handleLogin = async () => {
     try {
       setAuthLoading(true);
-      await signInWithPopup(auth, googleProvider);
       setErrorText(null);
+      await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error(err);
       setErrorText(`구글 로그인 실패: ${err.message || '인증 오류가 발생했습니다.'}`);
@@ -235,12 +228,7 @@ export default function AdminPanel() {
       setAuthLoading(true);
       setErrorText(null);
 
-      // 1. Establish immediate secure client-side admin session
-      setIsLocallyAuthenticated(true);
-      localStorage.setItem('lo_admin_authenticated', 'true');
-
-      // 2. Programmatically login/register to Firebase Auth as loungeseoulicheon@loungeoperation.co.kr in the background
-      // so Firestore DB rules accept read/write safely
+      // Programmatically login/register to Firebase Auth as loungeseoulicheon@loungeoperation.co.kr
       try {
         await signInWithEmailAndPassword(auth, 'loungeseoulicheon@loungeoperation.co.kr', cleanPw);
       } catch (fbErr: any) {
@@ -248,7 +236,17 @@ export default function AdminPanel() {
         try {
           await createUserWithEmailAndPassword(auth, 'loungeseoulicheon@loungeoperation.co.kr', cleanPw);
         } catch (createErr: any) {
-          console.warn("Auto admin creation failed: ", createErr);
+          console.error("Auto admin creation failed: ", createErr);
+          
+          let detailedMsg = "Firebase 인증 서버 연결 오류가 발생했습니다.";
+          if (createErr.code === 'auth/operation-not-allowed' || createErr.code === 'auth/configuration-not-found') {
+            detailedMsg = "Firebase 콘솔에서 '이메일/비밀번호(Email/Password)' 로그인 방식이 활성화되지 않았습니다. 콘솔에서 활성화해 주시거나, 하단의 'Google 계정으로 로그인'을 이용해 주세요.";
+          } else if (createErr.code === 'auth/unauthorized-domain') {
+            detailedMsg = "현재 도메인이 Firebase 승인 도메인 목록에 등록되어 있지 않습니다. 하단의 'Google 계정으로 로그인'을 이용해 주세요.";
+          } else {
+            detailedMsg = `인증 오류 (${createErr.code || createErr.message || String(createErr)}). 하단의 'Google 계정으로 로그인'을 이용해 주십시오.`;
+          }
+          throw new Error(detailedMsg);
         }
       }
     } catch (err: any) {
@@ -260,8 +258,6 @@ export default function AdminPanel() {
   };
 
   const handleLogout = async () => {
-    setIsLocallyAuthenticated(false);
-    localStorage.removeItem('lo_admin_authenticated');
     await signOut(auth);
     setSelectedInquiry(null);
   };
@@ -352,17 +348,17 @@ export default function AdminPanel() {
           </div>
 
           <div className="flex flex-wrap gap-3 items-center justify-center">
-            {(user || isLocallyAuthenticated) && (
+            {user && (
               <div className="flex items-center space-x-2.5 px-3 py-1.5 rounded bg-brand-navy-900 border border-brand-gold-500/10 text-xs text-gray-300">
                 <UserIcon className="w-3.5 h-3.5 text-brand-gold-400" />
-                <span className="font-sans">loungeseoulicheon (최고 관리자)</span>
+                <span className="font-sans">{user.email?.split('@')[0]} (최고 관리자)</span>
                 <span className="bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.2 rounded font-mono text-[9px] uppercase font-bold">
                   MASTER ADMIN
                 </span>
               </div>
             )}
 
-            {(user || isLocallyAuthenticated) && (
+            {user && (
               <button
                 onClick={handleLogout}
                 className="bg-brand-navy-900 hover:bg-brand-navy-800 border border-brand-gold-500/20 text-brand-gold-400 px-3 py-1.5 rounded text-xs flex items-center gap-1.5 pointer cursor-pointer font-medium transition-all"
@@ -381,7 +377,7 @@ export default function AdminPanel() {
             <span className="inline-block w-8 h-8 border-t-2 border-brand-gold-500 rounded-full animate-spin"></span>
             <p className="mt-4 text-xs text-gray-400 font-mono">인증 서버 연결 및 확인 중...</p>
           </div>
-        ) : (!user && !isLocallyAuthenticated) ? (
+        ) : !user ? (
           /* Locked State View with Custom ID and Password */
           <div className="max-w-md mx-auto text-center py-12 px-6 bg-brand-navy-900/60 rounded border border-brand-gold-500/20 shadow-2xl relative overflow-hidden" id="admin-gating-card">
             <div className="absolute top-0 left-0 w-full h-[2px] bg-brand-gold-500/30"></div>
@@ -399,7 +395,7 @@ export default function AdminPanel() {
 
             {/* Error Message rendering inside login card */}
             {errorText && (
-              <div className="mb-6 p-3 bg-red-950/60 border border-red-500/30 rounded text-left text-xs text-red-300 flex items-start gap-2 animate-pulse">
+              <div className="mb-6 p-3 bg-red-950/60 border border-red-500/30 rounded text-left text-xs text-red-300 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" id="login-error-icon" />
                 <span>{errorText}</span>
               </div>
@@ -447,6 +443,21 @@ export default function AdminPanel() {
                 보안 관리실 로그인
               </button>
             </form>
+
+            <div className="mt-6 pt-5 border-t border-brand-gold-500/10 text-center">
+              <p className="text-[10px] text-gray-400 mb-2.5 font-sans">
+                또는 구글 최고관리자 계정(<span className="text-brand-gold-400 font-mono">loungeinseoul@gmail.com</span>)인 경우
+              </p>
+              <button
+                type="button"
+                onClick={handleLogin}
+                className="w-full bg-brand-navy-950 hover:bg-brand-navy-850 border border-brand-gold-500/20 text-brand-gold-400 py-2.5 px-4 rounded shadow hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider"
+                id="admin-google-login-btn-fallback"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                Google 계정으로 로그인 (간편인증)
+              </button>
+            </div>
             
             <p className="text-[10px] text-gray-500 leading-relaxed mt-4 text-center">
               ※ 이중 보안 암호화가 완료된 단일 지배인 전용 망입니다. 승인되지 않은 외부 접속 시도가 발생하면 기록 및 보안 차단 처리가 자동으로 개시됩니다.
