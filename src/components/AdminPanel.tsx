@@ -141,7 +141,10 @@ export default function AdminPanel() {
   }, []);
 
   // Is Authorized Admin
-  const isAuthorizedEmail = user?.email === 'loungeinseoul@gmail.com' || isLocallyAuthenticated;
+  const isAuthorizedEmail = 
+    user?.email === 'loungeinseoul@gmail.com' || 
+    user?.email === 'loungeseoulicheon@loungeoperation.co.kr' || 
+    isLocallyAuthenticated;
   const isAccessible = isAuthorizedEmail;
 
   // Real-time inquiries synchronization from Firestore
@@ -183,7 +186,7 @@ export default function AdminPanel() {
         try {
           handleFirestoreError(error, OperationType.LIST, 'inquiries');
         } catch (typedError: any) {
-          setErrorText('접근 거부: 이 데이터는 loungeinseoul@gmail.com 계정 전용 정보입니다.');
+          setErrorText('접근 거부: 이 데이터는 라운지오퍼레이션 최고 관리자 전용 정보입니다.');
         }
       }
     );
@@ -236,19 +239,16 @@ export default function AdminPanel() {
       setIsLocallyAuthenticated(true);
       localStorage.setItem('lo_admin_authenticated', 'true');
 
-      // 2. Programmatically login/register to Firebase Auth as loungeinseoul@gmail.com in the background
+      // 2. Programmatically login/register to Firebase Auth as loungeseoulicheon@loungeoperation.co.kr in the background
       // so Firestore DB rules accept read/write safely
       try {
-        await signInWithEmailAndPassword(auth, 'loungeinseoul@gmail.com', cleanPw);
+        await signInWithEmailAndPassword(auth, 'loungeseoulicheon@loungeoperation.co.kr', cleanPw);
       } catch (fbErr: any) {
-        if (fbErr.code === 'auth/user-not-found') {
-          try {
-            await createUserWithEmailAndPassword(auth, 'loungeinseoul@gmail.com', cleanPw);
-          } catch (createErr: any) {
-            console.warn("Auto admin creation failed: ", createErr);
-          }
-        } else {
-          console.warn("Firebase sign in failed: ", fbErr.message);
+        console.log("Firebase sign in failed, attempting auto creation...", fbErr.message);
+        try {
+          await createUserWithEmailAndPassword(auth, 'loungeseoulicheon@loungeoperation.co.kr', cleanPw);
+        } catch (createErr: any) {
+          console.warn("Auto admin creation failed: ", createErr);
         }
       }
     } catch (err: any) {

@@ -33,7 +33,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && 
-             request.auth.token.email == 'loungeinseoul@gmail.com';
+             (request.auth.token.email == 'loungeinseoul@gmail.com' ||
+              request.auth.token.email == 'loungeseoulicheon@loungeoperation.co.kr');
     }
 
     function isValidInquiryCreate(data) {
